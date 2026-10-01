@@ -96,19 +96,18 @@ clean <- raw %>%
 # Hg LOD: 3.60 ug/L
 lods <- clean %>%
     mutate(value = as.numeric(value),
-           lod = case_when(
+           lod_ugL = case_when(
                # indicators of concentrations >= LOD 
-               measure == 'C' & element == 'Pb' & value >= 14.14 ~ 'yes',
-               measure == 'C' & element == 'Pb' & value < 14.14 ~ 'no',
-               measure == 'C' & element == 'As' & value >= 2.3 ~ 'yes',
-               measure == 'C' & element == 'As' & value < 2.3 ~ 'no',
-               measure == 'C' & element == 'Hg' & value >= 3.6 ~ 'yes',
-               measure == 'C' & element == 'Hg' & value < 3.6 ~ 'no',
-               # LOD not relevant for intensity counts
-               measure == 'Iraw' | measure == 'Inet' ~ 'not relevant',
+               measure == 'C' & element == 'Pb' & value >= 14.14 ~ 1,
+               measure == 'C' & element == 'Pb' & value < 14.14 ~ 0,
+               measure == 'C' & element == 'As' & value >= 2.3 ~ 1,
+               measure == 'C' & element == 'As' & value < 2.3 ~ 0,
+               measure == 'C' & element == 'Hg' & value >= 3.6 ~ 1,
+               measure == 'C' & element == 'Hg' & value < 3.6 ~ 0,
                # elements other than Pb, As, Hg don't have LODs reported in Greier
-               .default = 'not established'))
+               # Inet and Iraw intensities don't have LOD
+               .default = NA))
 
 # output -----------------------------------------------------------------------
 # save data as csv file
-write.csv(lods, 'data-processed/blood-edxrf.csv', row.names = FALSE)
+write.csv(lods, 'data-processed/PEARLS-blood-edxrf.csv', row.names = FALSE)
