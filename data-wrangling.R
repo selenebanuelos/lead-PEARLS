@@ -13,7 +13,13 @@ library(tidyr)
 # raw EDXRF data
 raw <- read.csv('data-raw/Blood Spots Rose 8-20-2026.csv')
 
-# data wrangling ---------------------------------------------------------------
+# list of specimen IDs sent to Specht lab
+original_list <- read.csv('data-raw/DBS Lead pilot specimenID list.csv')
+
+# PEARLS plasma data IDs (links PEARLS IDs to specimen IDs)
+pearls <- read.csv('data-raw/PEARLSBio-Plasma_DATA_2023-06-28_1451.csv')
+
+# create column with element symbols -------------------------------------------
 # helper function that fills vector with element symbols
 fill_in <- function(x){
     
@@ -61,7 +67,7 @@ no_conc <- unique(elements) %>%
             c('Pb', 'As', 'Cd', 'Hg') # elements with back-calculated conc
             )
 
-# clean up format of raw data
+# clean up format of raw data 
 clean <- raw %>%
     # set var_element vector as new column names
     setNames(var_element) %>%
@@ -85,7 +91,40 @@ clean <- raw %>%
     # remove concentration rows for elements with intensity only
     filter(!(element %in% no_conc & measure == 'C')) %>%
     # clean up variable names
-    clean_names(.)
+    clean_names() %>%
+    # isolate ID numbers used during experimental run
+    mutate(specimenid = ident %>%
+               # remove 'ROSIE' prefix and any number of 0's before specimen ID 
+               # and remove '-2' suffix from any samples run in duplicate
+               str_remove_all('^ROSIE0*|-2') %>%
+               # remove all whitespaces
+               str_remove_all('\\s+') %>%
+               # convert from char to numeric
+               as.numeric()) %>%
+    # remove all whitespaces from experimental IDs & rename to 'expid'
+    mutate(expid = ident %>% str_remove_all('\\s+')) %>%
+    select(-ident)
+
+# link specimen IDs with PEARLS IDs --------------------------------------------
+# check that all the IDs used in experimental run match up with list of IDs that
+# was sent with samples
+setdiff(unique(clean$specimenid), original_list$specimenID) 
+# experimental IDs has ID: 438
+
+setdiff(original_list$specimenID, unique(clean$specimenid)) 
+# original list sent has ID: 439
+
+# change specimen ID 438 in EDXRF data to correct specimen ID of 439
+clean[clean$specimenid == 438, 'specimenid'] <- 439
+clean[clean$expid == 'ROSIE000438', 'expid'] <- 'ROSIE000439'
+
+# link up EDXRF data with PEARLS ID, by specimenid
+linked <- pearls %>%
+    select(subjectid, specimenid) %>%
+    rename(pearls_id = subjectid) %>%
+    right_join(., clean, by = 'specimenid') %>%
+    # rearrange to show all IDs in first few columns
+    select(pearls_id, specimenid, expid, everything()) 
 
 # indicate LODs ----------------------------------------------------------------
 # create indicator that specifies if concentrations are above or equal to limit 
@@ -94,7 +133,7 @@ clean <- raw %>%
 # Pb LOD: 14.14 ug/L
 # As LOD: 2.30 ug/L
 # Hg LOD: 3.60 ug/L
-lods <- clean %>%
+lods <- linked %>%
     mutate(value = as.numeric(value),
            lod_ugL = case_when(
                # indicators of concentrations >= LOD 
